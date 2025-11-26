@@ -1,67 +1,81 @@
 /* FILE: api/chat.js
-   PURPOSE: Anti-Crash Mode (Using Dynamic Imports)
+   PURPOSE: Direct API Mode (No Library Required)
 */
 
-module.exports = async (req, res) => {
-  
-  // --- 1. CORS HEADERS (Set these FIRST) ---
-  res.setHeader('Access-Control-Allow-Origin', '*'); 
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export const config = {
+  runtime: 'edge', // Faster, lighter, and supports 'fetch' natively
+};
 
-  // Handle "Knock Knock" (Preflight)
+export default async function handler(req) {
+  
+  // --- 1. CORS SETUP (Standard) ---
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405 });
   }
 
   try {
-    // --- 2. DYNAMIC LOAD (The Fix) ---
-    // We use 'await import' so if it fails, we catch it gracefully without crashing the server
-    let GoogleGenerativeAI;
-    try {
-      const module = await import("@google/generative-ai");
-      GoogleGenerativeAI = module.GoogleGenerativeAI;
-    } catch (importError) {
-      throw new Error("LIBRARY ERROR: Vercel cannot find '@google/generative-ai'. Please check package.json.");
-    }
-
-    // --- 3. CHECK API KEY ---
+    // --- 2. GET DATA ---
+    const { contents } = await req.json();
     const API_KEY = process.env.GEMINI_API_KEY;
+
     if (!API_KEY) {
-      throw new Error("KEY ERROR: My API Key is missing in Vercel Settings.");
+       throw new Error("API Key is missing in Vercel Settings.");
     }
 
-    // --- 4. CHECK MESSAGE ---
-    const { contents } = req.body;
-    if (!contents) {
-      // If we got here, the connection is working!
-      return res.status(200).json({ text: "Connected! Waiting for your message..." });
+    // --- 3. DIRECT CALL TO GOOGLE (The Fix) ---
+    // We call the URL directly, so we don't need to install any library.
+    const googleResponse = await fetch(
+      https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY},
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: contents,
+          system_instruction: {
+            parts: { text: "You are Zoya, the jewelry assistant for Owao Jewels. Answer shortly in English, Hindi, or Bengali." }
+          }
+        })
+      }
+    );
+
+    const data = await googleResponse.json();
+
+    // Check if Google sent an error
+    if (data.error) {
+      throw new Error(data.error.message);
     }
 
-    // --- 5. RUN AI ---
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        systemInstruction: "You are Zoya, the jewelry assistant. Answer shortly."
+    // Extract the text
+    const text = data.candidates[0].content.parts[0].text;
+
+    // --- 4. SUCCESS RESPONSE ---
+    return new Response(JSON.stringify({ text: text }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
     });
 
-    const cleanHistory = contents.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.parts[0].text }] 
-    }));
-
-    const chat = model.startChat({ history: cleanHistory });
-    const lastMessage = contents[contents.length - 1].parts[0].text;
-    
-    const result = await chat.sendMessage(lastMessage);
-    const response = await result.response;
-    const text = response.text();
-
-    return res.status(200).json({ text: text });
-
   } catch (error) {
-    console.error("Caught Error:", error);
-    // Send the error to the chat window (Status 200 ensures the browser shows it)
-    return res.status(200).json({ text: 🛑 DIAGNOSIS: ${error.message} });
+    // Return the actual error to the chat window
+    return new Response(JSON.stringify({ text: ⚠ ERROR: ${error.message} }), {
+      status: 200, // We send 200 so the frontend displays the error message
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
   }
-};
+}
