@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
     }
   });
 
-  // *** THE FIX IS HERE: Added backticks around the URL ***
+  // *** THE FIX IS HERE: Added backticks (`) around the URL ***
   const googleUrl = url.parse(https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY});
 
   const options = {
