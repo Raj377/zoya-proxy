@@ -1,68 +1,68 @@
 /* FILE: api/chat.js
-   PURPOSE: Standard Node.js Mode (No Library + No Config Needed)
+   PURPOSE: Universal Node.js Chat (No Config Required)
 */
 
 module.exports = async (req, res) => {
   
-  // --- 1. CORS HEADERS ---
+  // --- 1. CORS HEADERS (The Door Opener) ---
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle Preflight
+  // Handle "Knock Knock" (Preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // --- 2. CHECK METHOD & KEY ---
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
-
-  const API_KEY = process.env.GEMINI_API_KEY;
-  if (!API_KEY) {
-    return res.status(500).json({ text: "⚠ System Error: API Key is missing in Vercel Settings." });
-  }
-
+  // --- 2. ERROR CATCHER (Prevents "Network Error") ---
   try {
-    // --- 3. GET DATA ---
-    const { contents } = req.body;
     
-    if (!contents) {
-        return res.status(200).json({ text: "Connected! Waiting for message..." });
+    // Check if user is sending data (POST)
+    if (req.method !== 'POST') {
+      return res.status(200).json({ text: "Connected! Please send a POST message." });
     }
 
-    // --- 4. DIRECT CALL TO GOOGLE (Using Standard Fetch) ---
-    // This uses the built-in internet tool, no installation required.
-    const response = await fetch(
-      https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY},
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          system_instruction: {
+    // Check API Key
+    const API_KEY = process.env.GEMINI_API_KEY;
+    if (!API_KEY) {
+      throw new Error("My API Key is missing in Vercel Settings.");
+    }
+
+    // Get User Message
+    const { contents } = req.body;
+    if (!contents) {
+      throw new Error("I received an empty message.");
+    }
+
+    // --- 3. TALK TO GOOGLE (Direct Line) ---
+    // We send the message directly to Google's API URL
+    const googleUrl = https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY};
+    
+    const response = await fetch(googleUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: contents,
+        system_instruction: {
             parts: { text: "You are Zoya, the jewelry assistant for Owao Jewels. Answer shortly in English, Hindi, or Bengali." }
-          }
-        })
-      }
-    );
+        }
+      })
+    });
 
     const data = await response.json();
 
-    // Check for Google Errors
+    // Check if Google is angry
     if (data.error) {
-        throw new Error(data.error.message);
+      throw new Error("Google Error: " + data.error.message);
     }
 
-    // Extract Text
+    // Success!
     const text = data.candidates[0].content.parts[0].text;
-
-    // --- 5. SUCCESS ---
     return res.status(200).json({ text: text });
 
   } catch (error) {
-    console.error("Error:", error);
-    return res.status(200).json({ text: ⚠ ERROR: ${error.message} });
+    console.error(error);
+    // CRITICAL: We send Status 200 so the chat window displays the error text!
+    return res.status(200).json({ text: 🛑 FIX ME: ${error.message} });
   }
 };
