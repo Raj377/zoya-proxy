@@ -1,41 +1,40 @@
 /* FILE: api/chat.js
-   PURPOSE: Direct API Mode (No Library Required)
+   PURPOSE: Standard Node.js Mode (No Library + No Config Needed)
 */
 
-export const config = {
-  runtime: 'edge', // Faster, lighter, and supports 'fetch' natively
-};
-
-export default async function handler(req) {
+module.exports = async (req, res) => {
   
-  // --- 1. CORS SETUP (Standard) ---
+  // --- 1. CORS HEADERS ---
+  res.setHeader('Access-Control-Allow-Origin', '*'); 
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle Preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+    return res.status(200).end();
   }
 
+  // --- 2. CHECK METHOD & KEY ---
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405 });
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
+  const API_KEY = process.env.GEMINI_API_KEY;
+  if (!API_KEY) {
+    return res.status(500).json({ text: "⚠ System Error: API Key is missing in Vercel Settings." });
   }
 
   try {
-    // --- 2. GET DATA ---
-    const { contents } = await req.json();
-    const API_KEY = process.env.GEMINI_API_KEY;
-
-    if (!API_KEY) {
-       throw new Error("API Key is missing in Vercel Settings.");
+    // --- 3. GET DATA ---
+    const { contents } = req.body;
+    
+    if (!contents) {
+        return res.status(200).json({ text: "Connected! Waiting for message..." });
     }
 
-    // --- 3. DIRECT CALL TO GOOGLE (The Fix) ---
-    // We call the URL directly, so we don't need to install any library.
-    const googleResponse = await fetch(
+    // --- 4. DIRECT CALL TO GOOGLE (Using Standard Fetch) ---
+    // This uses the built-in internet tool, no installation required.
+    const response = await fetch(
       https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY},
       {
         method: 'POST',
@@ -49,33 +48,21 @@ export default async function handler(req) {
       }
     );
 
-    const data = await googleResponse.json();
+    const data = await response.json();
 
-    // Check if Google sent an error
+    // Check for Google Errors
     if (data.error) {
-      throw new Error(data.error.message);
+        throw new Error(data.error.message);
     }
 
-    // Extract the text
+    // Extract Text
     const text = data.candidates[0].content.parts[0].text;
 
-    // --- 4. SUCCESS RESPONSE ---
-    return new Response(JSON.stringify({ text: text }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
+    // --- 5. SUCCESS ---
+    return res.status(200).json({ text: text });
 
   } catch (error) {
-    // Return the actual error to the chat window
-    return new Response(JSON.stringify({ text: ⚠ ERROR: ${error.message} }), {
-      status: 200, // We send 200 so the frontend displays the error message
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
+    console.error("Error:", error);
+    return res.status(200).json({ text: ⚠ ERROR: ${error.message} });
   }
-}
+};
