@@ -1,75 +1,90 @@
 /* FILE: api/chat.js
-   PURPOSE: Vercel Edge Function (Fast, Built-in Fetch, No Crash)
+   PURPOSE: Native Node.js (Zero Dependencies, Zero Fetch, Old School)
 */
 
-export const config = {
-  runtime: 'edge', // <--- This forces the modern system
-};
+const https = require('https');
+const url = require('url');
 
-export default async function handler(req) {
+module.exports = async (req, res) => {
   
   // --- 1. CORS HEADERS ---
-  // We allow everyone (*) to talk to Zoya
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+  res.setHeader('Access-Control-Allow-Origin', '*'); 
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // --- 2. SETUP ---
+  const API_KEY = process.env.GEMINI_API_KEY;
+  if (!API_KEY) {
+    return res.status(200).json({ text: "🛑 ERROR: API Key is missing in Vercel." });
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(200).json({ text: "Connected! Please send a POST message." });
+  }
+
+  const { contents } = req.body || {};
+  if (!contents) {
+    return res.status(200).json({ text: "🛑 ERROR: No message received." });
+  }
+
+  // --- 3. PREPARE DATA FOR GOOGLE ---
+  const postData = JSON.stringify({
+    contents: contents,
+    system_instruction: {
+        parts: { text: "You are Zoya, the jewelry assistant for Owao Jewels. Answer shortly in English, Hindi, or Bengali." }
+    }
+  });
+
+  const googleUrl = url.parse(https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY});
+
+  const options = {
+    hostname: googleUrl.hostname,
+    path: googleUrl.path,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(postData)
+    }
   };
 
-  // Handle "Knock Knock" (Preflight)
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers: corsHeaders });
-  }
+  // --- 4. SEND REQUEST (The Native Way) ---
+  return new Promise((resolve, reject) => {
+    const reqGoogle = https.request(options, (resGoogle) => {
+      let responseBody = '';
 
-  try {
-    // --- 2. GET DATA ---
-    if (req.method !== 'POST') {
-        return new Response(JSON.stringify({ text: "Please use POST method." }), { status: 200, headers: corsHeaders });
-    }
+      resGoogle.on('data', (chunk) => {
+        responseBody += chunk;
+      });
 
-    const { contents } = await req.json();
-    const API_KEY = process.env.GEMINI_API_KEY;
-
-    if (!API_KEY) {
-       throw new Error("System Error: API Key is missing in Vercel Settings.");
-    }
-
-    // --- 3. DIRECT CALL TO GOOGLE ---
-    const googleResponse = await fetch(
-      https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY},
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          system_instruction: {
-            parts: { text: "You are Zoya, the jewelry assistant for Owao Jewels. Answer shortly in English, Hindi, or Bengali." }
+      resGoogle.on('end', () => {
+        try {
+          const data = JSON.parse(responseBody);
+          
+          if (data.error) {
+            res.status(200).json({ text: 🛑 GOOGLE ERROR: ${data.error.message} });
+          } else {
+            const text = data.candidates[0].content.parts[0].text;
+            res.status(200).json({ text: text });
           }
-        })
-      }
-    );
-
-    const data = await googleResponse.json();
-
-    // Check if Google sent an error (like Invalid Key)
-    if (data.error) {
-      throw new Error(Google says: ${data.error.message});
-    }
-
-    // Success!
-    const text = data.candidates[0].content.parts[0].text;
-
-    return new Response(JSON.stringify({ text: text }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          resolve();
+        } catch (e) {
+          res.status(200).json({ text: 🛑 PARSE ERROR: ${e.message} });
+          resolve();
+        }
+      });
     });
 
-  } catch (error) {
-    // --- 4. ERROR REPORTER ---
-    // We send Status 200 (OK) even if it fails, so the Chat Window SHOWS the error text!
-    return new Response(JSON.stringify({ text: 🛑 FIX ME: ${error.message} }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    reqGoogle.on('error', (e) => {
+      res.status(200).json({ text: 🛑 NETWORK ERROR: ${e.message} });
+      resolve();
     });
-  }
-}
+
+    // Write data to request body
+    reqGoogle.write(postData);
+    reqGoogle.end();
+  });
+};
