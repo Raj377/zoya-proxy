@@ -1,4 +1,8 @@
 {
+  "name": "zoya-proxy",
+  "version": "1.0.0",
+  "description": "Zoya Proxy Server",
+  "main": "api/chat.js",
   "dependencies": {
     "@google/generative-ai": "^0.21.0"
   }
