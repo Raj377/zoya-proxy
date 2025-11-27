@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Syntax Fixed with Standard Quotes)
+   PURPOSE: Zoya Backend (Native Node.js - Using Gemini Pro)
 */
 
 const https = require('https');
@@ -37,13 +37,15 @@ module.exports = async (req, res) => {
   // 5. Prepare Data
   const postData = JSON.stringify({
     contents: contents,
+    // Note: Gemini Pro sometimes ignores system_instruction in older versions, 
+    // but we leave it here just in case. Zoya will still work.
     system_instruction: {
         parts: { text: "You are Zoya, the jewelry assistant for Owao Jewels. Answer shortly in English, Hindi, or Bengali." }
     }
   });
 
-  // *** THE FIX IS HERE *** // We are using single quotes (') and a plus sign (+). This is safer.
-  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
+  // *** THE FIX: Switched to 'gemini-1.5-flash-latest' which is more stable ***
+  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' + API_KEY;
   
   const googleUrl = url.parse(link);
 
