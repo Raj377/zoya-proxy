@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Using Gemini 1.5 Flash - The Standard Model)
+   PURPOSE: Zoya Backend (Upgraded to Gemini 2.5 Flash)
 */
 
 const https = require('https');
@@ -42,8 +42,9 @@ module.exports = async (req, res) => {
     }
   });
 
-  // *** THE FIX: Using the Real, Available Model Name ***
-  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
+  // *** THE FIX: Upgraded to 'gemini-2.5-flash' ***
+  // This is the current active model for fast chat responses.
+  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + API_KEY;
   
   const googleUrl = url.parse(link);
 
