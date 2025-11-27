@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Native Node.js - Fixed URL Syntax)
+   PURPOSE: Zoya Backend (Native Node.js - Fixed Syntax)
 */
 
 const https = require('https');
@@ -20,21 +20,21 @@ module.exports = async (req, res) => {
   // 2. Check API Key
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
-    return res.status(200).json({ text: "🛑 System Error: GEMINI_API_KEY is missing in Vercel." });
+    return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
   }
 
-  // 3. Test Connection (Browser Visit)
+  // 3. Test Connection
   if (req.method === 'GET') {
-    return res.status(200).json({ text: "✅ Server is Online! (Send a POST request to chat)" });
+    return res.status(200).json({ text: "✅ AI Server is Online! (Send a POST request)" });
   }
 
-  // 4. Get User Message
+  // 4. Get Message
   const { contents } = req.body || {};
   if (!contents) {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // 5. Prepare Data
+  // 5. Prepare Google Data
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: {
@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
     }
   });
 
-  // *** THE FIX: Notice the backticks (`) around the link below ***
+  // *** FIX IS HERE: I added the backticks (`) around the URL ***
   const googleUrl = url.parse(https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY});
 
   const options = {
