@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Strict Multi-Language with Dual Script)
+   PURPOSE: Zoya Backend (Gemini 2.5 Flash + Strict Dual Script Languages)
 */
 
 const https = require('https');
@@ -29,18 +29,17 @@ module.exports = async (req, res) => {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // --- 4. THE LANGUAGE BRAIN ---
-  // We define specific rules for each language option
-  let systemRule = "You are Zoya, a 23-year-old female jewelry assistant. Answer in polite English only. Keep it short.";
+  // --- 4. THE LANGUAGE BRAIN (Strict Rules) ---
+  let systemRule = "You are Zoya, a 23-year-old female jewelry assistant for Owao Jewels. Answer in polite English only. Keep it short and friendly.";
 
   if (language === 'hi-IN') {
-    systemRule = `You are Zoya, a 23-year-old female jewelry assistant. 
+    systemRule = `You are Zoya, a 23-year-old female jewelry assistant for Owao Jewels. 
     You must answer in Hindi (Devanagari script) followed by the Roman Hindi (Hinglish) pronunciation in parentheses.
     Example format: नमस्ते, मैं ज़ोया हूँ। (Namaste, main Zoya hoon.)
     Do not use Bengali or English text outside the parentheses.`;
   } 
   else if (language === 'bn-BD') {
-    systemRule = `You are Zoya, a 23-year-old female jewelry assistant. 
+    systemRule = `You are Zoya, a 23-year-old female jewelry assistant for Owao Jewels. 
     You must answer in Bengali (Bangla script) followed by the Roman Bengali pronunciation in parentheses.
     Example format: নমস্কার, আমি জোয়া। (Nomoshkar, ami Zoya.)
     Do not use Hindi or English text outside the parentheses.`;
@@ -54,6 +53,7 @@ module.exports = async (req, res) => {
     }
   });
 
+  // *** CORRECTED: Using 'gemini-2.5-flash' ***
   const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + API_KEY;
   const googleUrl = url.parse(link);
 
