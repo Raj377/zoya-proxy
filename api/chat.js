@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Native Node.js - Fixed Syntax)
+   PURPOSE: Zoya Backend (Syntax Fixed with Standard Quotes)
 */
 
 const https = require('https');
@@ -20,12 +20,12 @@ module.exports = async (req, res) => {
   // 2. Check API Key
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
-    return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
+    return res.status(200).json({ text: "🛑 System Error: API Key is missing in Vercel." });
   }
 
   // 3. Test Connection
   if (req.method === 'GET') {
-    return res.status(200).json({ text: "✅ AI Server is Online! (Send a POST request)" });
+    return res.status(200).json({ text: "✅ AI Server is Online! (Send a POST request to chat)" });
   }
 
   // 4. Get Message
@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // 5. Prepare Google Data
+  // 5. Prepare Data
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: {
@@ -42,8 +42,10 @@ module.exports = async (req, res) => {
     }
   });
 
-  // *** FIX IS HERE: I added the backticks (`) around the URL ***
-  const googleUrl = url.parse(https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY});
+  // *** THE FIX IS HERE *** // We are using single quotes (') and a plus sign (+). This is safer.
+  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
+  
+  const googleUrl = url.parse(link);
 
   const options = {
     hostname: googleUrl.hostname,
@@ -67,19 +69,19 @@ module.exports = async (req, res) => {
           try {
             const data = JSON.parse(responseBody);
             if (data.error) {
-              resolve({ text: 🛑 Google Error: ${data.error.message} });
+              resolve({ text: '🛑 Google Error: ' + data.error.message });
             } else {
               const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "🛑 Error: No text returned.";
               resolve({ text: text });
             }
           } catch (e) {
-            resolve({ text: 🛑 Parse Error: ${e.message} });
+            resolve({ text: '🛑 Parse Error: ' + e.message });
           }
         });
       });
 
       reqGoogle.on('error', (e) => {
-        resolve({ text: 🛑 Network Error: ${e.message} });
+        resolve({ text: '🛑 Network Error: ' + e.message });
       });
 
       reqGoogle.write(postData);
