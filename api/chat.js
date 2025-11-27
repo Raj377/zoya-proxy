@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Native Node.js AI (Fixed URL Syntax)
+   PURPOSE: Native Node.js AI (Fixed Syntax Error)
 */
 
 const https = require('https');
@@ -7,7 +7,7 @@ const url = require('url');
 
 module.exports = async (req, res) => {
   
-  // --- 1. ALLOW CONNECTION (CORS) ---
+  // 1. Allow Connection (CORS)
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -17,24 +17,24 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  // --- 2. CHECK SETTINGS ---
+  // 2. Check Settings
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
-    return res.status(200).json({ text: "🛑 System Error: API Key is missing in Vercel." });
+    return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
   }
 
-  // If you click the link in browser (GET), say Hello
+  // 3. Test Connection (Browser Visit)
   if (req.method === 'GET') {
     return res.status(200).json({ text: "✅ AI Server is Online! (Send a POST to chat)" });
   }
 
-  // --- 3. GET MESSAGE ---
+  // 4. Get Message
   const { contents } = req.body || {};
   if (!contents) {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // --- 4. PREPARE GOOGLE REQUEST ---
+  // 5. Prepare Google Request
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: {
@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
     }
   });
 
-  // *** THE FIX IS HERE: Added backticks (`) around the URL ***
+  // *** FIXED: Added backticks (`) around the URL ***
   const googleUrl = url.parse(https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY});
 
   const options = {
@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
     }
   };
 
-  // --- 5. SEND TO GOOGLE (Native Way) ---
+  // 6. Send to Google (Native Way)
   const getAIResponse = () => {
     return new Promise((resolve) => {
       const reqGoogle = https.request(options, (resGoogle) => {
@@ -69,18 +69,11 @@ module.exports = async (req, res) => {
             if (data.error) {
               resolve({ text: 🛑 Google Error: ${data.error.message} });
             } else {
-              // Safety check if Google returns partial data
-              const candidate = data.candidates && data.candidates[0];
-              const part = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0];
-              
-              if (part && part.text) {
-                  resolve({ text: part.text });
-              } else {
-                  resolve({ text: "🛑 Error: Google sent a blank response." });
-              }
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              resolve({ text: text || "🛑 Error: No text returned." });
             }
           } catch (e) {
-            resolve({ text: 🛑 Parse Error: ${e.message} - Body: ${responseBody} });
+            resolve({ text: 🛑 Parse Error: ${e.message} });
           }
         });
       });
