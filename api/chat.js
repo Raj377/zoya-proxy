@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Upgraded to Gemini 2.5 Flash)
+   PURPOSE: Zoya Backend (Strict Multi-Language with Dual Script)
 */
 
 const https = require('https');
@@ -7,12 +7,11 @@ const url = require('url');
 
 module.exports = async (req, res) => {
   
-  // 1. Allow Connection (CORS)
+  // 1. CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle "Knock Knock"
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -20,32 +19,42 @@ module.exports = async (req, res) => {
   // 2. Check API Key
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
-    return res.status(200).json({ text: "🛑 System Error: API Key is missing in Vercel." });
+    return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
   }
 
-  // 3. Test Connection
-  if (req.method === 'GET') {
-    return res.status(200).json({ text: "✅ Zoya Server is Online! (Send a POST request)" });
-  }
-
-  // 4. Get Message
-  const { contents } = req.body || {};
+  // 3. Get User Data
+  const { contents, language } = req.body || {};
+  
   if (!contents) {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // 5. Prepare Data
+  // --- 4. THE LANGUAGE BRAIN ---
+  // We define specific rules for each language option
+  let systemRule = "You are Zoya, a 23-year-old female jewelry assistant. Answer in polite English only. Keep it short.";
+
+  if (language === 'hi-IN') {
+    systemRule = `You are Zoya, a 23-year-old female jewelry assistant. 
+    You must answer in Hindi (Devanagari script) followed by the Roman Hindi (Hinglish) pronunciation in parentheses.
+    Example format: नमस्ते, मैं ज़ोया हूँ। (Namaste, main Zoya hoon.)
+    Do not use Bengali or English text outside the parentheses.`;
+  } 
+  else if (language === 'bn-BD') {
+    systemRule = `You are Zoya, a 23-year-old female jewelry assistant. 
+    You must answer in Bengali (Bangla script) followed by the Roman Bengali pronunciation in parentheses.
+    Example format: নমস্কার, আমি জোয়া। (Nomoshkar, ami Zoya.)
+    Do not use Hindi or English text outside the parentheses.`;
+  }
+
+  // 5. Prepare Request
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: {
-        parts: { text: "You are Zoya, the jewelry assistant for Owao Jewels. Answer shortly in English, Hindi, or Bengali." }
+        parts: { text: systemRule }
     }
   });
 
-  // *** THE FIX: Upgraded to 'gemini-2.5-flash' ***
-  // This is the current active model for fast chat responses.
-  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + API_KEY;
-  
+  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
   const googleUrl = url.parse(link);
 
   const options = {
@@ -63,9 +72,7 @@ module.exports = async (req, res) => {
     return new Promise((resolve) => {
       const reqGoogle = https.request(options, (resGoogle) => {
         let responseBody = '';
-
         resGoogle.on('data', (chunk) => { responseBody += chunk; });
-
         resGoogle.on('end', () => {
           try {
             const data = JSON.parse(responseBody);
@@ -80,11 +87,7 @@ module.exports = async (req, res) => {
           }
         });
       });
-
-      reqGoogle.on('error', (e) => {
-        resolve({ text: '🛑 Network Error: ' + e.message });
-      });
-
+      reqGoogle.on('error', (e) => { resolve({ text: '🛑 Network Error: ' + e.message }); });
       reqGoogle.write(postData);
       reqGoogle.end();
     });
