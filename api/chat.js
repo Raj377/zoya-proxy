@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Native Node.js AI (Fixed Syntax Error)
+   PURPOSE: Zoya Backend (Native Node.js - Fixed URL Syntax)
 */
 
 const https = require('https');
@@ -17,24 +17,24 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  // 2. Check Settings
+  // 2. Check API Key
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
-    return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
+    return res.status(200).json({ text: "🛑 System Error: GEMINI_API_KEY is missing in Vercel." });
   }
 
   // 3. Test Connection (Browser Visit)
   if (req.method === 'GET') {
-    return res.status(200).json({ text: "✅ AI Server is Online! (Send a POST to chat)" });
+    return res.status(200).json({ text: "✅ Server is Online! (Send a POST request to chat)" });
   }
 
-  // 4. Get Message
+  // 4. Get User Message
   const { contents } = req.body || {};
   if (!contents) {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // 5. Prepare Google Request
+  // 5. Prepare Data
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: {
@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
     }
   });
 
-  // *** FIXED: Added backticks (`) around the URL ***
+  // *** THE FIX: Notice the backticks (`) around the link below ***
   const googleUrl = url.parse(https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY});
 
   const options = {
@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
     }
   };
 
-  // 6. Send to Google (Native Way)
+  // 6. Send to Google
   const getAIResponse = () => {
     return new Promise((resolve) => {
       const reqGoogle = https.request(options, (resGoogle) => {
@@ -69,8 +69,8 @@ module.exports = async (req, res) => {
             if (data.error) {
               resolve({ text: 🛑 Google Error: ${data.error.message} });
             } else {
-              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-              resolve({ text: text || "🛑 Error: No text returned." });
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "🛑 Error: No text returned.";
+              resolve({ text: text });
             }
           } catch (e) {
             resolve({ text: 🛑 Parse Error: ${e.message} });
