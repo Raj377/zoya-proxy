@@ -97,7 +97,7 @@ module.exports = async (req, res) => {
             } else {
                 // *** TELL THE USER THE ERROR ***
                 const debugCode = orderData ? orderData.debug : "UNKNOWN";
-                orderInfoText = \n[SYSTEM ALERT: CONNECTION FAILED. Error Code: ${debugCode}. Inform the user exactly what this code is.]\n;
+                orderInfoText = `\n[SYSTEM ALERT: CONNECTION FAILED. Error Code: ${debugCode}. Inform the user exactly what this code is.]\n`;
             }
         }
 
