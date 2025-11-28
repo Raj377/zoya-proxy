@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend Level 2 (Live WooCommerce Order Lookup)
+   PURPOSE: Zoya Backend Level 2 (Safer Syntax Version)
 */
 
 const https = require('https');
@@ -39,8 +39,10 @@ const checkOrder = (orderId) => {
             return;
         }
 
-        // Basic Auth for WooCommerce
-        const auth = 'Basic ' + Buffer.from(`${ck}:${cs}`).toString('base64');
+        // --- SAFE FIX 1: Using '+' instead of backticks ---
+        const authString = ck + ':' + cs;
+        const auth = 'Basic ' + Buffer.from(authString).toString('base64');
+        
         const options = {
             method: 'GET',
             headers: { 
@@ -49,7 +51,8 @@ const checkOrder = (orderId) => {
             }
         };
 
-        const reqUrl = ${SITE_URL}/wp-json/wc/v3/orders/${orderId};
+        // --- SAFE FIX 2: Using '+' instead of backticks ---
+        const reqUrl = SITE_URL + '/wp-json/wc/v3/orders/' + orderId;
 
         const req = https.request(reqUrl, options, (res) => {
             let data = '';
@@ -60,6 +63,13 @@ const checkOrder = (orderId) => {
                         resolve({ found: false });
                     } else if (res.statusCode === 200) {
                         const order = JSON.parse(data);
+                        
+                        // Handle items list safely
+                        let itemsList = "items";
+                        if (order.line_items) {
+                             itemsList = order.line_items.map(function(i) { return i.name; }).slice(0, 2).join(", ");
+                        }
+
                         resolve({
                             found: true,
                             id: order.id,
@@ -67,8 +77,7 @@ const checkOrder = (orderId) => {
                             date: order.date_created,
                             total: order.total,
                             currency: order.currency_symbol,
-                            // Grab the first 2 items names to be helpful
-                            items: order.line_items ? order.line_items.map(i => i.name).slice(0, 2).join(", ") : "items"
+                            items: itemsList
                         });
                     } else {
                         resolve(null); // Error or unauthorized
@@ -117,22 +126,18 @@ module.exports = async (req, res) => {
       const orderData = await checkOrder(orderId);
 
       if (orderData && orderData.found) {
-          orderInfoText = `
-          [SYSTEM ALERT: REAL-TIME DATA FOUND]
-          The user is asking about Order #${orderData.id}.
-          - Status: ${orderData.status.toUpperCase()}
-          - Date: ${orderData.date}
-          - Total: ${orderData.total}
-          - Items: ${orderData.items}
-          
-          INSTRUCTION: Tell the user this status clearly. If the status is 'processing', ask them to wait a bit. If 'completed' or 'shipped', give them good news.
-          `;
+          // --- SAFE FIX 3: Standard strings ---
+          orderInfoText = "\n[SYSTEM ALERT: REAL-TIME DATA FOUND]\n" +
+          "The user is asking about Order #" + orderData.id + ".\n" +
+          "- Status: " + orderData.status.toUpperCase() + "\n" +
+          "- Date: " + orderData.date + "\n" +
+          "- Total: " + orderData.total + "\n" +
+          "- Items: " + orderData.items + "\n" +
+          "INSTRUCTION: Tell the user this status clearly. If the status is 'processing', ask them to wait a bit. If 'completed' or 'shipped', give them good news.\n";
       } else if (orderData && !orderData.found) {
-          orderInfoText = `
-          [SYSTEM ALERT]
-          The user mentioned number #${orderId}, but I checked the database and this Order ID DOES NOT EXIST.
-          INSTRUCTION: Politely tell them you couldn't find that order number and ask them to check it again.
-          `;
+          orderInfoText = "\n[SYSTEM ALERT]\n" +
+          "The user mentioned number #" + orderId + ", but I checked the database and this Order ID DOES NOT EXIST.\n" +
+          "INSTRUCTION: Politely tell them you couldn't find that order number and ask them to check it again.\n";
       }
   }
 
@@ -160,9 +165,9 @@ module.exports = async (req, res) => {
 
   // Language Logic
   if (language === 'hi-IN') {
-    systemRule += \nOutput: Hindi (Devanagari) + Hinglish (Roman) in parentheses.;
+    systemRule += "\nOutput: Hindi (Devanagari) + Hinglish (Roman) in parentheses.";
   } else if (language === 'bn-BD') {
-    systemRule += \nOutput: Bengali (Bangla) + Roman Bengali in parentheses.;
+    systemRule += "\nOutput: Bengali (Bangla) + Roman Bengali in parentheses.";
   } else {
     systemRule += "\nOutput: Polite English only.";
   }
