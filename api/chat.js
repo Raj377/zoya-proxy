@@ -1,9 +1,9 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend Level 2 (Safer Syntax Version)
+   PURPOSE: Zoya Backend (Modern URL Fix + Safe Syntax)
 */
 
 const https = require('https');
-const url = require('url');
+// REMOVED: const url = require('url'); (This was causing the warning)
 
 // --- 1. CONFIGURATION ---
 const SITE_URL = 'https://www.owaojewels.com'; // Your Website
@@ -39,7 +39,7 @@ const checkOrder = (orderId) => {
             return;
         }
 
-        // --- SAFE FIX 1: Using '+' instead of backticks ---
+        // --- SAFE FIX: Using '+' for Auth ---
         const authString = ck + ':' + cs;
         const auth = 'Basic ' + Buffer.from(authString).toString('base64');
         
@@ -51,7 +51,7 @@ const checkOrder = (orderId) => {
             }
         };
 
-        // --- SAFE FIX 2: Using '+' instead of backticks ---
+        // --- SAFE FIX: Using '+' for URL ---
         const reqUrl = SITE_URL + '/wp-json/wc/v3/orders/' + orderId;
 
         const req = https.request(reqUrl, options, (res) => {
@@ -115,18 +115,16 @@ module.exports = async (req, res) => {
 
   // --- 4. ORDER LOOKUP LOGIC ---
   const lastMessage = contents[contents.length - 1].parts[0].text;
-  
-  // Regex: Looks for "Order 123", "#123", or just "12345" if it's 4+ digits
   const orderMatch = lastMessage.match(/(?:order|#)?\s*(\d{4,})/i);
   
-  let orderInfoText = ""; // Default empty
+  let orderInfoText = ""; 
 
   if (orderMatch) {
       const orderId = orderMatch[1];
       const orderData = await checkOrder(orderId);
 
       if (orderData && orderData.found) {
-          // --- SAFE FIX 3: Standard strings ---
+          // --- SAFE FIX: Standard strings ---
           orderInfoText = "\n[SYSTEM ALERT: REAL-TIME DATA FOUND]\n" +
           "The user is asking about Order #" + orderData.id + ".\n" +
           "- Status: " + orderData.status.toUpperCase() + "\n" +
@@ -163,7 +161,6 @@ module.exports = async (req, res) => {
     Answer in the language specified below.
   `;
 
-  // Language Logic
   if (language === 'hi-IN') {
     systemRule += "\nOutput: Hindi (Devanagari) + Hinglish (Roman) in parentheses.";
   } else if (language === 'bn-BD') {
@@ -172,18 +169,20 @@ module.exports = async (req, res) => {
     systemRule += "\nOutput: Polite English only.";
   }
 
-  // --- 6. SEND TO GEMINI ---
+  // --- 6. SEND TO GEMINI (MODERN URL FIX) ---
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: { parts: { text: systemRule } }
   });
 
   const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
-  const googleUrl = url.parse(link);
+  
+  // *** THE FIX: Using new URL() instead of url.parse() ***
+  const myUrl = new URL(link);
 
   const options = {
-    hostname: googleUrl.hostname,
-    path: googleUrl.path,
+    hostname: myUrl.hostname,
+    path: myUrl.pathname + myUrl.search, // Manually combining path + query
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
