@@ -8,7 +8,7 @@ const https = require('https');
 const SITE_URL = 'https://www.owaojewels.com';
 // We use the standard 1.5 Flash model. 
 // "2.5" does not exist and will cause crashes.
-const MODEL_NAME = 'gemini-1.5-flash'; 
+const MODEL_NAME = 'gemini-2.5-flash'; 
 
 // --- 2. THE KNOWLEDGE BASE (Extracted from your 8 Photos) ---
 const KNOWLEDGE_BASE = `
