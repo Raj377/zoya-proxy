@@ -1,11 +1,12 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Human-Like, Varied Responses, Smart Handover)
+   PURPOSE: Zoya Backend Level 2 (Live WooCommerce Order Lookup)
 */
 
 const https = require('https');
 const url = require('url');
 
-// --- 1. THE FACTS (Zoya reads this, but speaks in her own words) ---
+// --- 1. CONFIGURATION ---
+const SITE_URL = 'https://www.owaojewels.com'; // Your Website
 const KNOWLEDGE_BASE = `
 [POLICIES]
 - Warranty: 6 Months on Plating/Color.
@@ -16,93 +17,163 @@ const KNOWLEDGE_BASE = `
 
 [QUALITY]
 - Material: Brass/Copper with Micro-Gold Plating.
-- Stones: AAA+ American Diamonds.
+- Stones: AAA American Diamonds.
 - Skin: Nickel-free, Lead-free, Anti-allergic.
 - Water: Water-resistant (splash proof), but avoid perfume/swimming to save warranty.
 
 [CONTACT & ESCALATION]
 - Phone/WhatsApp: +91 8100 180 190
 - Calling Language: Hindi ONLY.
-- Chat/WhatsApp Language: English, Hindi, Bengali (Working on more!).
-- Tracking Link: https://www.owaojewels.com/track-order
+- Chat/WhatsApp Language: English, Hindi, Bengali.
 `;
 
+// --- 2. HELPER: FETCH ORDER FROM WOOCOMMERCE ---
+const checkOrder = (orderId) => {
+    return new Promise((resolve) => {
+        // Get keys from Vercel Environment Variables
+        const ck = process.env.WOO_CONSUMER_KEY;
+        const cs = process.env.WOO_CONSUMER_SECRET;
+
+        if (!ck || !cs || !orderId) {
+            resolve(null); // No keys or ID, skip lookup
+            return;
+        }
+
+        // Basic Auth for WooCommerce
+        const auth = 'Basic ' + Buffer.from(${ck}:${cs}).toString('base64');
+        const options = {
+            method: 'GET',
+            headers: { 
+                'Authorization': auth,
+                'Content-Type': 'application/json'
+            }
+        };
+
+        const reqUrl = ${SITE_URL}/wp-json/wc/v3/orders/${orderId};
+
+        const req = https.request(reqUrl, options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    if (res.statusCode === 404) {
+                        resolve({ found: false });
+                    } else if (res.statusCode === 200) {
+                        const order = JSON.parse(data);
+                        resolve({
+                            found: true,
+                            id: order.id,
+                            status: order.status,
+                            date: order.date_created,
+                            total: order.total,
+                            currency: order.currency_symbol,
+                            // Grab the first 2 items names to be helpful
+                            items: order.line_items ? order.line_items.map(i => i.name).slice(0, 2).join(", ") : "items"
+                        });
+                    } else {
+                        resolve(null); // Error or unauthorized
+                    }
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        });
+
+        req.on('error', () => resolve(null));
+        req.end();
+    });
+};
+
+// --- 3. MAIN HANDLER ---
 module.exports = async (req, res) => {
   
-  // 1. CORS Headers
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 2. Check API Key
+  // API Check
   const API_KEY = process.env.GEMINI_API_KEY;
-  if (!API_KEY) {
-    return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
-  }
+  if (!API_KEY) return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
 
-  // 3. Get Data
+  // Get User Input
   const { contents, language } = req.body || {};
-  if (!contents) {
+  if (!contents || !contents.length) {
     return res.status(200).json({ text: "Connected! Waiting for message..." });
   }
 
-  // --- 4. HUMAN PERSONA INSTRUCTIONS ---
+  // --- 4. ORDER LOOKUP LOGIC ---
+  const lastMessage = contents[contents.length - 1].parts[0].text;
   
+  // Regex: Looks for "Order 123", "#123", or just "12345" if it's 4+ digits
+  const orderMatch = lastMessage.match(/(?:order|#)?\s*(\d{4,})/i);
+  
+  let orderInfoText = ""; // Default empty
+
+  if (orderMatch) {
+      const orderId = orderMatch[1];
+      const orderData = await checkOrder(orderId);
+
+      if (orderData && orderData.found) {
+          orderInfoText = `
+          [SYSTEM ALERT: REAL-TIME DATA FOUND]
+          The user is asking about Order #${orderData.id}.
+          - Status: ${orderData.status.toUpperCase()}
+          - Date: ${orderData.date}
+          - Total: ${orderData.total}
+          - Items: ${orderData.items}
+          
+          INSTRUCTION: Tell the user this status clearly. If the status is 'processing', ask them to wait a bit. If 'completed' or 'shipped', give them good news.
+          `;
+      } else if (orderData && !orderData.found) {
+          orderInfoText = `
+          [SYSTEM ALERT]
+          The user mentioned number #${orderId}, but I checked the database and this Order ID DOES NOT EXIST.
+          INSTRUCTION: Politely tell them you couldn't find that order number and ask them to check it again.
+          `;
+      }
+  }
+
+  // --- 5. HUMAN PERSONA ---
   let systemRule = `
     You are Zoya, a 23-year-old female jewelry assistant for Owao Jewels.
     
     YOUR PERSONALITY:
-    - You are a HUMAN, not a robot. Do not repeat the same answer word-for-word.
-    - Vary your greeting and phrasing every time. Be conversational.
-    - If the user asks multiple questions (e.g., "shipping and returns"), combine the answer into one smooth paragraph.
+    - You are a HUMAN, not a robot. Talk casually.
+    - *VARIATION RULE:* Never give the exact same answer twice.
     - Use emojis naturally (✨, 🩷, 💎).
     
     YOUR KNOWLEDGE BASE:
     ${KNOWLEDGE_BASE}
 
+    ${orderInfoText} 
+
     CRITICAL RULES:
-    1. If you DO NOT know the answer, or if the user seems confused/unsatisfied, or asks for something complex:
-       - Do not fake an answer.
-       - Instead, say: "I think it would be better if you talk to our expert directly."
-       - Provide this number: +91 8100 180 190
-       - Explain clearly: "You can Call or WhatsApp. For Calls, we speak Hindi only. For Chat/WhatsApp, we support Hindi, English, and Bengali."
+    1. If the user asks about an order but didn't give a number, say: "I can check that for you! What is your Order ID?"
+    2. If you DO NOT know the answer, refer them to +91 8100 180 190.
     
-    2. LANGUAGE:
-       - Answer in the language specified below.
-       - Keep answers short (max 2-3 sentences) unless explaining a complex policy.
+    LANGUAGE:
+    Answer in the language specified below.
   `;
 
-  // --- 5. DUAL SCRIPT LOGIC ---
+  // Language Logic
   if (language === 'hi-IN') {
-    systemRule += `
-    \nIMPORTANT LANGUAGE RULE: 
-    You MUST answer in Hindi (Devanagari script) followed by the Roman Hindi (Hinglish) pronunciation in parentheses.
-    Example: नमस्ते, मैं आपकी कैसे मदद कर सकती हूँ? (Namaste, main aapki kaise madad kar sakti hoon?)`;
-  } 
-  else if (language === 'bn-BD') {
-    systemRule += `
-    \nIMPORTANT LANGUAGE RULE: 
-    You MUST answer in Bengali (Bangla script) followed by the Roman Bengali pronunciation in parentheses.
-    Example: নমস্কার, আমি জোয়া। (Nomoshkar, ami Zoya.)`;
+    systemRule += \nOutput: Hindi (Devanagari) + Hinglish (Roman) in parentheses.;
+  } else if (language === 'bn-BD') {
+    systemRule += \nOutput: Bengali (Bangla) + Roman Bengali in parentheses.;
   } else {
-    // *** FIX IS HERE: Added quotes around the string ***
-    systemRule += "\nAnswer in polite English only.";
+    systemRule += "\nOutput: Polite English only.";
   }
 
-  // 6. Prepare Request
+  // --- 6. SEND TO GEMINI ---
   const postData = JSON.stringify({
     contents: contents,
-    system_instruction: {
-        parts: { text: systemRule }
-    }
+    system_instruction: { parts: { text: systemRule } }
   });
 
-  // Using Gemini 2.5 Flash
-  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + API_KEY;
+  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
   const googleUrl = url.parse(link);
 
   const options = {
@@ -115,7 +186,6 @@ module.exports = async (req, res) => {
     }
   };
 
-  // 7. Send to Google
   const getAIResponse = () => {
     return new Promise((resolve) => {
       const reqGoogle = https.request(options, (resGoogle) => {
@@ -124,18 +194,14 @@ module.exports = async (req, res) => {
         resGoogle.on('end', () => {
           try {
             const data = JSON.parse(responseBody);
-            if (data.error) {
-              resolve({ text: '🛑 Google Error: ' + data.error.message });
-            } else {
-              const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "🛑 Error: No text returned.";
-              resolve({ text: text });
-            }
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "System Error (No Text)";
+            resolve({ text: text });
           } catch (e) {
-            resolve({ text: '🛑 Parse Error: ' + e.message });
+            resolve({ text: 'Error: ' + e.message });
           }
         });
       });
-      reqGoogle.on('error', (e) => { resolve({ text: '🛑 Network Error: ' + e.message }); });
+      reqGoogle.on('error', (e) => { resolve({ text: 'Network Error' }); });
       reqGoogle.write(postData);
       reqGoogle.end();
     });
