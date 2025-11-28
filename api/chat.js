@@ -1,26 +1,49 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Bulletproof Debugger Version)
+   PURPOSE: Zoya Backend (Full Policy Integration + Safe Syntax)
 */
 
 const https = require('https');
 
 // --- 1. CONFIGURATION ---
 const SITE_URL = 'https://www.owaojewels.com';
+// We use the standard 1.5 Flash model. 
+// "2.5" does not exist and will cause crashes.
 const MODEL_NAME = 'gemini-1.5-flash'; 
 
+// --- 2. THE KNOWLEDGE BASE (Extracted from your 8 Photos) ---
 const KNOWLEDGE_BASE = `
-[POLICIES]
-- Warranty: 6 Months on Plating/Color.
-- Returns: 7-Day return policy for damaged/wrong items only. Requires Unboxing Video.
-- Shipping: Free above ₹499. Takes 5-7 days.
-- COD: Not available currently. Online payment only.
-- Exchange: Not available.
+[CRITICAL RULES - READ FIRST]
+1. UNBOXING VIDEO: A clear 360-degree unboxing video is MANDATORY for any return claim. No video = No return.
+2. COD: Cash on Delivery is CURRENTLY UNAVAILABLE. Online payment only.
+3. RETURNS: Only accepted for Damaged or Wrong products.
+4. RETURN METHOD: Customer must ship the return via "India Post Office".
+5. CANCELLATION: Not possible once the order is dispatched.
+
+[SHIPPING & DELIVERY]
+- Processing Time: 24-48 Hours.
+- DTDC / Professional Courier: 6-9 Business Days.
+- India Post: 9-15 Business Days.
+- Delays: Please allow extra 2-3 days for holidays/weather.
+- Missed Delivery: If returned due to wrong address/unavailability, Courier & Repacking charges apply for reshipping.
+
+[REFUNDS]
+- Timing: 5-7 Business Days after return is approved.
+- Method: Refunded to the original payment source.
+- Deductions: Shipping charges are deducted if the return is due to customer error (e.g., wrong address).
+
+[QUALITY & WARRANTY]
+- Material: Brass with Micro-Gold Plating. AAA+ Stones.
+- Warranty: NO Warranty or Guarantee.
+- Lifespan: 3-6 Months (Color/Shine) with proper care.
+- Water: Daily wear safe (splash resistant), but remove before swimming/bathing.
+- Care: Avoid perfume/sweat. Store in an air-tight pouch (zip lock).
 
 [CONTACT]
-- Phone: +91 8100 180 190 (Hindi Calls Only)
+- Phone: +91 8100 180 190 (Hindi Calls Only).
+- Chat: English, Hindi, Bengali.
 `;
 
-// --- 2. HELPER: FETCH ORDER (Safely) ---
+// --- 3. HELPER: FETCH ORDER (Safely) ---
 const checkOrder = (orderId) => {
     return new Promise((resolve) => {
         try {
@@ -28,11 +51,11 @@ const checkOrder = (orderId) => {
             const cs = process.env.WOO_CONSUMER_SECRET;
 
             if (!ck || !cs || !orderId) { 
-                resolve({ found: false, error: "Missing Keys" }); 
+                resolve({ found: false }); 
                 return; 
             }
 
-            // Safe Base64 encoding
+            // Safe Syntax (No backticks to prevent copy-paste errors)
             const authString = ck + ':' + cs;
             const auth = 'Basic ' + Buffer.from(authString).toString('base64');
             
@@ -64,14 +87,14 @@ const checkOrder = (orderId) => {
             req.on('error', () => resolve({ found: false }));
             req.end();
         } catch (e) {
-            resolve({ found: false }); // Fail silently if helper crashes
+            resolve({ found: false });
         }
     });
 };
 
-// --- 3. MAIN HANDLER (With Safety Net) ---
+// --- 4. MAIN HANDLER ---
 module.exports = async (req, res) => {
-    // A. CORS HEADERS (Must be first)
+    // A. CORS HEADERS
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -79,33 +102,25 @@ module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        // --- START OF SAFETY NET ---
-
         // B. API KEY CHECK
         const API_KEY = process.env.GEMINI_API_KEY;
         if (!API_KEY) {
-            throw new Error("GEMINI_API_KEY is missing in Vercel Settings.");
+            return res.status(200).json({ text: "🛑 Error: GEMINI_API_KEY is missing in Vercel." });
         }
 
-        // C. PARSE BODY (Handle string or object)
+        // C. PARSE INPUT
         let bodyData = req.body;
         if (typeof bodyData === 'string') {
             try { bodyData = JSON.parse(bodyData); } catch (e) {}
         }
         
         const contents = bodyData ? bodyData.contents : null;
-        
-        // Check if contents is valid
         if (!contents || !Array.isArray(contents) || contents.length === 0) {
-             return res.status(200).json({ text: "👋 Hello! I am Zoya. (System Ready)" });
+             return res.status(200).json({ text: "👋 Zoya is online. (System Ready)" });
         }
 
         const lastPart = contents[contents.length - 1].parts;
-        if (!lastPart || !lastPart[0] || !lastPart[0].text) {
-             return res.status(200).json({ text: "👋 I am listening..." });
-        }
-
-        const lastMessage = lastPart[0].text;
+        const lastMessage = (lastPart && lastPart[0]) ? lastPart[0].text : "";
 
         // D. ORDER CHECK LOGIC
         let orderInfoText = "";
@@ -118,20 +133,35 @@ module.exports = async (req, res) => {
             if (orderData && orderData.found) {
                 orderInfoText = "\n[SYSTEM DATA: Order #" + orderData.id + " is " + orderData.status + ". Items: " + orderData.items + "]\n";
             } else {
-                orderInfoText = "\n[SYSTEM DATA: checked for order #" + orderId + " but found nothing.]\n";
+                orderInfoText = "\n[SYSTEM DATA: checked for order #" + orderId + " but found nothing. Ask user to check the number.]\n";
             }
         }
 
-        // E. PREPARE GEMINI REQUEST
-        let systemRule = "You are Zoya, helpful AI for Owao Jewels. Keep answers short. " + KNOWLEDGE_BASE + orderInfoText;
+        // E. PREPARE PERSONA
+        let systemRule = "You are Zoya, the AI assistant for Owao Jewels. " +
+                         "You are a 23-year-old human female, NOT a robot. Talk casually and politely. " +
+                         "Keep answers SHORT (max 2-3 sentences). " +
+                         "Never repeat the exact same phrasing. " +
+                         "Use emojis naturally (✨, 🩷). " +
+                         KNOWLEDGE_BASE + orderInfoText;
 
+        // Language specific instruction
+        const language = bodyData.language || 'en-US';
+        if (language === 'hi-IN') {
+            systemRule += " \nOUTPUT RULE: Answer in Hindi (Devanagari) followed by Roman Hindi (Hinglish) in parentheses.";
+        } else if (language === 'bn-BD') {
+            systemRule += " \nOUTPUT RULE: Answer in Bengali (Bangla script) followed by Roman Bengali in parentheses.";
+        } else {
+            systemRule += " \nOUTPUT RULE: Answer in polite English.";
+        }
+
+        // F. SEND TO GOOGLE
         const postData = JSON.stringify({
             contents: contents,
             system_instruction: { parts: { text: systemRule } }
         });
 
-        // F. SEND TO GOOGLE
-        // Safe URL creation
+        // FIXED URL CONSTRUCTION
         const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODEL_NAME + ':generateContent';
         const finalUrl = baseUrl + '?key=' + API_KEY;
         const myUrl = new URL(finalUrl);
@@ -147,7 +177,7 @@ module.exports = async (req, res) => {
         };
 
         const getAIResponse = () => {
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
                 const reqGoogle = https.request(options, (resGoogle) => {
                     let responseBody = '';
                     resGoogle.on('data', (chunk) => responseBody += chunk);
@@ -155,19 +185,20 @@ module.exports = async (req, res) => {
                         try {
                             const data = JSON.parse(responseBody);
                             if (data.error) {
-                                resolve("⚠ Google Error: " + data.error.message);
+                                // If 1.5 Flash fails, we show the error cleanly
+                                resolve("⚠ Zoya Brain Error: " + data.error.message);
                             } else if (data.candidates && data.candidates[0] && data.candidates[0].content) {
                                 resolve(data.candidates[0].content.parts[0].text);
                             } else {
-                                resolve("⚠ Empty Response from AI. (Debug: " + JSON.stringify(data) + ")");
+                                resolve("⚠ No response from Zoya.");
                             }
                         } catch (e) {
-                            resolve("⚠ Parse Error from Google: " + e.message);
+                            resolve("⚠ Connection Error.");
                         }
                     });
                 });
                 
-                reqGoogle.on('error', (e) => resolve("⚠ Network Error connecting to Google: " + e.message));
+                reqGoogle.on('error', (e) => resolve("⚠ Network Error."));
                 reqGoogle.write(postData);
                 reqGoogle.end();
             });
@@ -177,10 +208,7 @@ module.exports = async (req, res) => {
         return res.status(200).json({ text: aiText });
 
     } catch (criticalError) {
-        // --- SAFETY NET CATCHES THE CRASH HERE ---
         console.error("SERVER CRASH:", criticalError);
-        return res.status(200).json({ 
-            text: "🛑 CRASH REPORT: " + criticalError.message + "\n(Show this to the developer)"
-        });
+        return res.status(200).json({ text: "🛑 Critical Error: " + criticalError.message });
     }
 };
