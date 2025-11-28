@@ -93,7 +93,7 @@ module.exports = async (req, res) => {
             const orderData = await checkOrder(orderId);
             
             if (orderData && orderData.found) {
-                orderInfoText = \n[SYSTEM: SUCCESS! Found Order #${orderData.id}. Status: ${orderData.status}.]\n;
+                orderInfoText = `\n[SYSTEM: SUCCESS! Found Order #${orderData.id}. Status: ${orderData.status}.]\n`;
             } else {
                 // *** TELL THE USER THE ERROR ***
                 const debugCode = orderData ? orderData.debug : "UNKNOWN";
