@@ -89,7 +89,8 @@ module.exports = async (req, res) => {
     You MUST answer in Bengali (Bangla script) followed by the Roman Bengali pronunciation in parentheses.
     Example: নমস্কার, আমি জোয়া। (Nomoshkar, ami Zoya.)`;
   } else {
-    systemRule += \nAnswer in polite English only.;
+    // *** FIX IS HERE: Added quotes around the string ***
+    systemRule += "\nAnswer in polite English only.";
   }
 
   // 6. Prepare Request
