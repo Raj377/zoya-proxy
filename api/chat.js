@@ -40,7 +40,7 @@ const checkOrder = (orderId) => {
         }
 
         // Basic Auth for WooCommerce
-        const auth = 'Basic ' + Buffer.from(${ck}:${cs}).toString('base64');
+        const auth = 'Basic ' + Buffer.from(`${ck}:${cs}`).toString('base64');
         const options = {
             method: 'GET',
             headers: { 
