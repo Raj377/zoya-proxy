@@ -6,7 +6,7 @@ const https = require('https');
 
 // --- 1. CONFIGURATION ---
 const SITE_URL = 'https://www.owaojewels.com';
-const MODEL_NAME = 'gemini-2.5-flash'; 
+const MODEL_NAME = 'gemini-1.5-flash'; 
 
 const KNOWLEDGE_BASE = `
 [CRITICAL RULES]
@@ -101,7 +101,7 @@ module.exports = async (req, res) => {
             }
         }
 
-        let systemRule = You are Zoya. ${KNOWLEDGE_BASE} ${orderInfoText} If you see a SYSTEM ALERT with an Error Code, tell the user: "I am getting Error Code: [Insert Code Here]. Please tell the developer.";
+        let systemRule = `You are Zoya. ${KNOWLEDGE_BASE} ${orderInfoText} If you see a SYSTEM ALERT with an Error Code, tell the user: "I am getting Error Code: [Insert Code Here]. Please tell the developer."`;
 
         const postData = JSON.stringify({ contents: contents, system_instruction: { parts: { text: systemRule } } });
 
