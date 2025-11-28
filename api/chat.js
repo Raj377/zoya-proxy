@@ -1,12 +1,14 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Modern URL Fix + Safe Syntax)
+   PURPOSE: Zoya Backend (DEBUG VERSION - Shows Real Error)
 */
 
 const https = require('https');
-// REMOVED: const url = require('url'); (This was causing the warning)
 
 // --- 1. CONFIGURATION ---
-const SITE_URL = 'https://www.owaojewels.com'; // Your Website
+const SITE_URL = 'https://www.owaojewels.com';
+// ** CRITICAL FIX: Using the Stable 1.5 Model **
+const MODEL_NAME = 'gemini-1.5-flash'; 
+
 const KNOWLEDGE_BASE = `
 [POLICIES]
 - Warranty: 6 Months on Plating/Color.
@@ -14,44 +16,24 @@ const KNOWLEDGE_BASE = `
 - Shipping: Free above ₹499. Takes 5-7 days.
 - COD: Not available currently. Online payment only.
 - Exchange: Not available.
-
-[QUALITY]
-- Material: Brass/Copper with Micro-Gold Plating.
-- Stones: AAA+ American Diamonds.
-- Skin: Nickel-free, Lead-free, Anti-allergic.
-- Water: Water-resistant (splash proof), but avoid perfume/swimming to save warranty.
-
-[CONTACT & ESCALATION]
-- Phone/WhatsApp: +91 8100 180 190
-- Calling Language: Hindi ONLY.
-- Chat/WhatsApp Language: English, Hindi, Bengali.
 `;
 
-// --- 2. HELPER: FETCH ORDER FROM WOOCOMMERCE ---
+// --- 2. HELPER: FETCH ORDER ---
 const checkOrder = (orderId) => {
     return new Promise((resolve) => {
-        // Get keys from Vercel Environment Variables
         const ck = process.env.WOO_CONSUMER_KEY;
         const cs = process.env.WOO_CONSUMER_SECRET;
 
-        if (!ck || !cs || !orderId) {
-            resolve(null); // No keys or ID, skip lookup
-            return;
-        }
+        if (!ck || !cs || !orderId) { resolve(null); return; }
 
-        // --- SAFE FIX: Using '+' for Auth ---
         const authString = ck + ':' + cs;
         const auth = 'Basic ' + Buffer.from(authString).toString('base64');
         
         const options = {
             method: 'GET',
-            headers: { 
-                'Authorization': auth,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': auth, 'Content-Type': 'application/json' }
         };
 
-        // --- SAFE FIX: Using '+' for URL ---
         const reqUrl = SITE_URL + '/wp-json/wc/v3/orders/' + orderId;
 
         const req = https.request(reqUrl, options, (res) => {
@@ -59,35 +41,16 @@ const checkOrder = (orderId) => {
             res.on('data', (chunk) => data += chunk);
             res.on('end', () => {
                 try {
-                    if (res.statusCode === 404) {
-                        resolve({ found: false });
-                    } else if (res.statusCode === 200) {
+                    if (res.statusCode === 200) {
                         const order = JSON.parse(data);
-                        
-                        // Handle items list safely
-                        let itemsList = "items";
-                        if (order.line_items) {
-                             itemsList = order.line_items.map(function(i) { return i.name; }).slice(0, 2).join(", ");
-                        }
-
-                        resolve({
-                            found: true,
-                            id: order.id,
-                            status: order.status,
-                            date: order.date_created,
-                            total: order.total,
-                            currency: order.currency_symbol,
-                            items: itemsList
-                        });
+                        let itemsList = order.line_items ? order.line_items.map(i => i.name).join(", ") : "items";
+                        resolve({ found: true, id: order.id, status: order.status, items: itemsList });
                     } else {
-                        resolve(null); // Error or unauthorized
+                        resolve(null);
                     }
-                } catch (e) {
-                    resolve(null);
-                }
+                } catch (e) { resolve(null); }
             });
         });
-
         req.on('error', () => resolve(null));
         req.end();
     });
@@ -95,99 +58,49 @@ const checkOrder = (orderId) => {
 
 // --- 3. MAIN HANDLER ---
 module.exports = async (req, res) => {
-  
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // API Check
   const API_KEY = process.env.GEMINI_API_KEY;
-  if (!API_KEY) return res.status(200).json({ text: "🛑 System Error: API Key is missing." });
+  if (!API_KEY) return res.status(200).json({ text: "🛑 System Error: GEMINI_API_KEY is missing in Vercel." });
 
-  // Get User Input
   const { contents, language } = req.body || {};
-  if (!contents || !contents.length) {
-    return res.status(200).json({ text: "Connected! Waiting for message..." });
-  }
+  if (!contents) return res.status(200).json({ text: "Hello! I am ready." });
 
-  // --- 4. ORDER LOOKUP LOGIC ---
+  // --- ORDER CHECK ---
   const lastMessage = contents[contents.length - 1].parts[0].text;
   const orderMatch = lastMessage.match(/(?:order|#)?\s*(\d{4,})/i);
-  
   let orderInfoText = ""; 
-
+  
   if (orderMatch) {
-      const orderId = orderMatch[1];
-      const orderData = await checkOrder(orderId);
-
+      const orderData = await checkOrder(orderMatch[1]);
       if (orderData && orderData.found) {
-          // --- SAFE FIX: Standard strings ---
-          orderInfoText = "\n[SYSTEM ALERT: REAL-TIME DATA FOUND]\n" +
-          "The user is asking about Order #" + orderData.id + ".\n" +
-          "- Status: " + orderData.status.toUpperCase() + "\n" +
-          "- Date: " + orderData.date + "\n" +
-          "- Total: " + orderData.total + "\n" +
-          "- Items: " + orderData.items + "\n" +
-          "INSTRUCTION: Tell the user this status clearly. If the status is 'processing', ask them to wait a bit. If 'completed' or 'shipped', give them good news.\n";
+          orderInfoText = \n[SYSTEM: Order #${orderData.id} is ${orderData.status}. Items: ${orderData.items}]\n;
       } else if (orderData && !orderData.found) {
-          orderInfoText = "\n[SYSTEM ALERT]\n" +
-          "The user mentioned number #" + orderId + ", but I checked the database and this Order ID DOES NOT EXIST.\n" +
-          "INSTRUCTION: Politely tell them you couldn't find that order number and ask them to check it again.\n";
+          orderInfoText = \n[SYSTEM: Order #${orderMatch[1]} NOT FOUND.]\n;
       }
   }
 
-  // --- 5. HUMAN PERSONA ---
-  let systemRule = `
-    You are Zoya, a 23-year-old female jewelry assistant for Owao Jewels.
-    
-    YOUR PERSONALITY:
-    - You are a HUMAN, not a robot. Talk casually.
-    - *VARIATION RULE:* Never give the exact same answer twice.
-    - Use emojis naturally (✨, 🩷, 💎).
-    
-    YOUR KNOWLEDGE BASE:
-    ${KNOWLEDGE_BASE}
+  // --- PERSONA ---
+  let systemRule = You are Zoya, friendly AI for Owao Jewels. Help politely. Short answers. ${KNOWLEDGE_BASE} ${orderInfoText};
 
-    ${orderInfoText} 
-
-    CRITICAL RULES:
-    1. If the user asks about an order but didn't give a number, say: "I can check that for you! What is your Order ID?"
-    2. If you DO NOT know the answer, refer them to +91 8100 180 190.
-    
-    LANGUAGE:
-    Answer in the language specified below.
-  `;
-
-  if (language === 'hi-IN') {
-    systemRule += "\nOutput: Hindi (Devanagari) + Hinglish (Roman) in parentheses.";
-  } else if (language === 'bn-BD') {
-    systemRule += "\nOutput: Bengali (Bangla) + Roman Bengali in parentheses.";
-  } else {
-    systemRule += "\nOutput: Polite English only.";
-  }
-
-  // --- 6. SEND TO GEMINI (MODERN URL FIX) ---
   const postData = JSON.stringify({
     contents: contents,
     system_instruction: { parts: { text: systemRule } }
   });
 
-  const link = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + API_KEY;
-  
-  // *** THE FIX: Using new URL() instead of url.parse() ***
+  // Using the Safe URL Construction
+  const link = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODEL_NAME + ':generateContent?key=' + API_KEY;
   const myUrl = new URL(link);
 
   const options = {
     hostname: myUrl.hostname,
-    path: myUrl.pathname + myUrl.search, // Manually combining path + query
+    path: myUrl.pathname + myUrl.search,
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(postData)
-    }
+    headers: { 'Content-Type': 'application/json' }
   };
 
   const getAIResponse = () => {
@@ -198,14 +111,25 @@ module.exports = async (req, res) => {
         resGoogle.on('end', () => {
           try {
             const data = JSON.parse(responseBody);
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "System Error (No Text)";
-            resolve({ text: text });
+            
+            // --- DEBUG LOGGING ---
+            console.log("GOOGLE RESPONSE:", JSON.stringify(data)); 
+
+            if (data.error) {
+              resolve({ text: '🛑 API Error: ' + data.error.message });
+            } else if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+              resolve({ text: data.candidates[0].content.parts[0].text });
+            } else {
+              // *** THIS IS THE DEBUG PART ***
+              // If text is missing, we send the RAW JSON to the user to see what happened.
+              resolve({ text: '⚠ DEBUG INFO: ' + JSON.stringify(data) });
+            }
           } catch (e) {
-            resolve({ text: 'Error: ' + e.message });
+            resolve({ text: '🛑 Parse Error: ' + e.message + " | Raw: " + responseBody });
           }
         });
       });
-      reqGoogle.on('error', (e) => { resolve({ text: 'Network Error' }); });
+      reqGoogle.on('error', (e) => { resolve({ text: '🛑 Network Error: ' + e.message }); });
       reqGoogle.write(postData);
       reqGoogle.end();
     });
