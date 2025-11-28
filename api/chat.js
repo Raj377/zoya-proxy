@@ -17,7 +17,7 @@ const KNOWLEDGE_BASE = `
 
 [QUALITY]
 - Material: Brass/Copper with Micro-Gold Plating.
-- Stones: AAA American Diamonds.
+- Stones: AAA+ American Diamonds.
 - Skin: Nickel-free, Lead-free, Anti-allergic.
 - Water: Water-resistant (splash proof), but avoid perfume/swimming to save warranty.
 
