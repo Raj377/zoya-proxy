@@ -6,7 +6,7 @@ const https = require('https');
 
 // --- 1. CONFIGURATION ---
 const SITE_URL = 'https://www.owaojewels.com';
-const MODEL_NAME = 'gemini-1.5-flash'; 
+const MODEL_NAME = 'gemini-2.5-flash'; 
 
 // --- 2. KNOWLEDGE BASE (Policies) ---
 const KNOWLEDGE_BASE = `
