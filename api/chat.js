@@ -1,12 +1,12 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (2025 Version: Gemini 2.5 + 'balance_noor' Support)
+   PURPOSE: Zoya Backend (Clean Version: No Wallet, Just Business)
 */
 
 const https = require('https');
 
 // --- 1. CONFIGURATION ---
 const SITE_URL = 'https://www.owaojewels.com';
-// UPDATED: Using the 2025 standard model as requested
+// As per your request, using the 2.5 version
 const MODEL_NAME = 'gemini-2.5-flash'; 
 
 // --- 2. KNOWLEDGE BASE ---
@@ -50,14 +50,16 @@ const wooFetch = (endpoint, ck, cs) => {
 
 // --- 4. DATA FETCHING LOGIC ---
 
-// A. Check Order
+// A. Check Order (By ID or Latest)
 const getOrderData = async (msg, userId, ck, cs) => {
+    // 1. Check for specific number
     const match = msg.match(/(?:order|#)?\s*(\d{4,})/i);
     if (match) {
         const order = await wooFetch(`orders/${match[1]}`, ck, cs);
         if (order) return `\n[SYSTEM: Order #${order.id} is ${order.status}. Items: ${order.line_items.map(i=>i.name).join(', ')}]\n`;
         return `\n[SYSTEM: Order #${match[1]} NOT FOUND.]\n`;
     } 
+    // 2. Check latest if user is logged in
     if (userId && userId !== '0' && msg.toLowerCase().includes('order')) {
         const orders = await wooFetch(`orders?customer=${userId}&per_page=1`, ck, cs);
         if (orders && orders.length > 0) {
@@ -67,41 +69,19 @@ const getOrderData = async (msg, userId, ck, cs) => {
     return "";
 };
 
-// B. Check Customer Profile (Targeting 'balance_noor')
+// B. Check Customer Profile (Clean - Name & Address Only)
 const getCustomerData = async (userId, ck, cs) => {
     if (!userId || userId === '0') return "";
 
     const c = await wooFetch(`customers/${userId}`, ck, cs);
     if (!c) return "";
 
-    let wallet = "0";
-    let debugKeys = ""; 
-
-    if (c.meta_data) {
-        // 1. Search for your specific 'balance_noor' key first!
-        const wInfo = c.meta_data.find(m => 
-            m.key === 'balance_noor' ||  // Exact match from your shortcode
-            m.key === '_balance_noor' || // Common hidden variation
-            m.key === 'noor_balance' ||
-            m.key === '_woo_wallet_balance' || 
-            m.key === 'current_balance'
-        );
-        
-        if (wInfo) {
-            wallet = wInfo.value;
-        }
-
-        // 2. Save keys for debugging (so we can see if we missed it)
-        debugKeys = c.meta_data.map(m => m.key + ": " + m.value).join(" | ");
-    }
-
     const addr = c.billing ? `${c.billing.city}, ${c.billing.state}` : "Unknown";
     
-    // We include the DEBUG KEYS in the system message so Zoya can see them
-    return `\n[USER PROFILE: Name: ${c.first_name} ${c.last_name}, City: ${addr}, WALLET BALANCE: ₹${wallet}]\n[SYSTEM DEBUG (Raw Keys): ${debugKeys}]\n`;
+    return `\n[USER PROFILE: Name: ${c.first_name} ${c.last_name}, City: ${addr}]\n`;
 };
 
-// C. Check Products
+// C. Search Products (Price, Stock, Attributes)
 const getProductData = async (msg, ck, cs) => {
     const keywords = ['price', 'cost', 'buy', 'stock', 'available', 'show', 'looking', 'size', 'color', 'ring', 'necklace', 'earring'];
     const hasKeyword = keywords.some(k => msg.toLowerCase().includes(k));
@@ -159,15 +139,13 @@ module.exports = async (req, res) => {
         let systemRule = "You are Zoya, the AI manager of Owao Jewels. " +
                          "Use the SYSTEM data provided to answer. " +
                          "Keep answers SHORT and polite. " +
-                         KNOWLEDGE_BASE + fullContext + 
-                         "\nIMPORTANT: If the user asks for Wallet Balance, check the [SYSTEM DEBUG] section for keys like 'balance_noor' and tell them that value.";
+                         KNOWLEDGE_BASE + fullContext;
 
         const lang = bodyData.language || 'en-US';
         if (lang === 'hi-IN') systemRule += " \nOUTPUT: Hindi + Hinglish (Roman) in brackets.";
         else if (lang === 'bn-BD') systemRule += " \nOUTPUT: Bengali + Roman Bengali in brackets.";
         else systemRule += " \nOUTPUT: Polite English.";
 
-        // --- SEND TO GOOGLE (USING 2.5 FLASH) ---
         const reqGoogle = https.request(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }
         }, (resGoogle) => {
@@ -178,7 +156,6 @@ module.exports = async (req, res) => {
                     const json = JSON.parse(data);
                     
                     if (json.error) {
-                        // If 2.5 still fails for some reason, we show the error clearly
                         res.status(200).json({ text: "⚠️ Model Error: " + json.error.message });
                     } else if (json.candidates && json.candidates[0] && json.candidates[0].content) {
                         let reply = json.candidates[0].content.parts[0].text;
