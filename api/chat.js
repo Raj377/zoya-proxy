@@ -1,5 +1,5 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Separated Scripts + Emojis + Order Logic)
+   PURPOSE: Zoya Backend (With Smart WhatsApp Handover)
 */
 
 const https = require('https');
@@ -21,7 +21,7 @@ const KNOWLEDGE_BASE = `
 - Call: +91 8100 180 190 (Hindi). Chat: English/Hindi/Bengali.
 `;
 
-// --- 3. HELPER: GENERIC WOOCOMMERCE FETCHER ---
+// --- 3. HELPER: WOOCOMMERCE FETCHER ---
 const wooFetch = (endpoint, ck, cs) => {
     return new Promise((resolve) => {
         if (!ck || !cs) { resolve(null); return; }
@@ -49,7 +49,6 @@ const wooFetch = (endpoint, ck, cs) => {
 
 // --- 4. DATA FETCHING LOGIC ---
 
-// A. Check Order
 const getOrderData = async (msg, userId, ck, cs) => {
     const match = msg.match(/(?:order|#)?\s*(\d{4,})/i);
     if (match) {
@@ -66,7 +65,6 @@ const getOrderData = async (msg, userId, ck, cs) => {
     return "";
 };
 
-// B. Check Customer Profile (Clean)
 const getCustomerData = async (userId, ck, cs) => {
     if (!userId || userId === '0') return "";
     const c = await wooFetch(`customers/${userId}`, ck, cs);
@@ -75,7 +73,6 @@ const getCustomerData = async (userId, ck, cs) => {
     return `\n[USER PROFILE: Name: ${c.first_name} ${c.last_name}, City: ${addr}]\n`;
 };
 
-// C. Check Products
 const getProductData = async (msg, ck, cs) => {
     const keywords = ['price', 'cost', 'buy', 'stock', 'available', 'show', 'looking', 'size', 'color', 'ring', 'necklace', 'earring'];
     const hasKeyword = keywords.some(k => msg.toLowerCase().includes(k));
@@ -132,17 +129,20 @@ module.exports = async (req, res) => {
         let systemRule = "You are Zoya, the AI manager of Owao Jewels. " +
                          "Use the SYSTEM data provided to answer. " +
                          "Keep answers SHORT (max 3 sentences) and warm. " +
-                         "ALWAYS use 1-2 Emojis (✨, 🩷, 💎) in every reply. " +
+                         "ALWAYS use 1-2 Emojis (✨, 🩷, 💎). " +
                          KNOWLEDGE_BASE + fullContext;
 
-        // --- UPDATED LANGUAGE LOGIC (SEPARATE SCRIPTS) ---
+        // --- NEW HANDOVER LOGIC ---
+        systemRule += " \nCRITICAL INSTRUCTION: If you CANNOT answer the user's question, or if you feel the user needs human help, simply apologize and then append exactly this code at the very end: [WHATSAPP_BUTTON]";
+
+        // Language Logic
         const lang = bodyData.language || 'en-US';
         if (lang === 'hi-IN') {
-            systemRule += " \nOUTPUT FORMAT: 1. Write the FULL response in Hindi (Devanagari) with Emojis. 2. Add two newlines (gap). 3. Then write the full English script/translation in parentheses ().";
+            systemRule += " \nOUTPUT FORMAT: 1. Hindi (Devanagari). 2. Double Newline. 3. English Script in parentheses (). 4. If needed, [WHATSAPP_BUTTON].";
         } else if (lang === 'bn-BD') {
-            systemRule += " \nOUTPUT FORMAT: 1. Write the FULL response in Bengali (Bangla Script) with Emojis. 2. Add two newlines (gap). 3. Then write the full English script/translation in parentheses ().";
+            systemRule += " \nOUTPUT FORMAT: 1. Bengali (Bangla). 2. Double Newline. 3. English Script in parentheses (). 4. If needed, [WHATSAPP_BUTTON].";
         } else {
-            systemRule += " \nOUTPUT FORMAT: Polite English with Emojis.";
+            systemRule += " \nOUTPUT FORMAT: Polite English. If needed, [WHATSAPP_BUTTON].";
         }
 
         const reqGoogle = https.request(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, {
@@ -153,14 +153,8 @@ module.exports = async (req, res) => {
             resGoogle.on('end', () => {
                 try {
                     const json = JSON.parse(data);
-                    if (json.error) {
-                        res.status(200).json({ text: "⚠️ Model Error: " + json.error.message });
-                    } else if (json.candidates && json.candidates[0] && json.candidates[0].content) {
-                        let reply = json.candidates[0].content.parts[0].text;
-                        res.status(200).json({ text: reply });
-                    } else {
-                        res.status(200).json({ text: "⚠️ Empty Response from AI." });
-                    }
+                    let reply = json.candidates?.[0]?.content?.parts?.[0]?.text || "Error.";
+                    res.status(200).json({ text: reply });
                 } catch (e) { res.status(200).json({ text: "Connection error." }); }
             });
         });
