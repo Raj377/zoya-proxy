@@ -17,7 +17,7 @@ const KNOWLEDGE_BASE = `
 - CANCELLATION: Impossible after dispatch.
 
 [SHIPPING & CONTACT]
-- Dispatch: 24-48 Hours. Delivery: 6-15 Days.
+- Dispatch: 24 to 48 Hours. Delivery: 6 to 15 Days.
 - Call: +91 8100 180 190 (Hindi). Chat: English/Hindi/Bengali.
 `;
 
