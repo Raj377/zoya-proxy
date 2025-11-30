@@ -1,12 +1,11 @@
 /* FILE: api/chat.js
-   PURPOSE: Zoya Backend (Clean Version: No Wallet, Just Business)
+   PURPOSE: Zoya Backend (Separated Scripts + Emojis + Order Logic)
 */
 
 const https = require('https');
 
 // --- 1. CONFIGURATION ---
 const SITE_URL = 'https://www.owaojewels.com';
-// As per your request, using the 2.5 version
 const MODEL_NAME = 'gemini-2.5-flash'; 
 
 // --- 2. KNOWLEDGE BASE ---
@@ -50,16 +49,14 @@ const wooFetch = (endpoint, ck, cs) => {
 
 // --- 4. DATA FETCHING LOGIC ---
 
-// A. Check Order (By ID or Latest)
+// A. Check Order
 const getOrderData = async (msg, userId, ck, cs) => {
-    // 1. Check for specific number
     const match = msg.match(/(?:order|#)?\s*(\d{4,})/i);
     if (match) {
         const order = await wooFetch(`orders/${match[1]}`, ck, cs);
         if (order) return `\n[SYSTEM: Order #${order.id} is ${order.status}. Items: ${order.line_items.map(i=>i.name).join(', ')}]\n`;
         return `\n[SYSTEM: Order #${match[1]} NOT FOUND.]\n`;
     } 
-    // 2. Check latest if user is logged in
     if (userId && userId !== '0' && msg.toLowerCase().includes('order')) {
         const orders = await wooFetch(`orders?customer=${userId}&per_page=1`, ck, cs);
         if (orders && orders.length > 0) {
@@ -69,23 +66,19 @@ const getOrderData = async (msg, userId, ck, cs) => {
     return "";
 };
 
-// B. Check Customer Profile (Clean - Name & Address Only)
+// B. Check Customer Profile (Clean)
 const getCustomerData = async (userId, ck, cs) => {
     if (!userId || userId === '0') return "";
-
     const c = await wooFetch(`customers/${userId}`, ck, cs);
     if (!c) return "";
-
     const addr = c.billing ? `${c.billing.city}, ${c.billing.state}` : "Unknown";
-    
     return `\n[USER PROFILE: Name: ${c.first_name} ${c.last_name}, City: ${addr}]\n`;
 };
 
-// C. Search Products (Price, Stock, Attributes)
+// C. Check Products
 const getProductData = async (msg, ck, cs) => {
     const keywords = ['price', 'cost', 'buy', 'stock', 'available', 'show', 'looking', 'size', 'color', 'ring', 'necklace', 'earring'];
     const hasKeyword = keywords.some(k => msg.toLowerCase().includes(k));
-    
     if (!hasKeyword) return "";
 
     const query = msg.replace(/(what is|how much|price of|show me|do you have|the)/gi, '').trim();
@@ -138,13 +131,19 @@ module.exports = async (req, res) => {
 
         let systemRule = "You are Zoya, the AI manager of Owao Jewels. " +
                          "Use the SYSTEM data provided to answer. " +
-                         "Keep answers SHORT and polite. " +
+                         "Keep answers SHORT (max 3 sentences) and warm. " +
+                         "ALWAYS use 1-2 Emojis (✨, 🩷, 💎) in every reply. " +
                          KNOWLEDGE_BASE + fullContext;
 
+        // --- UPDATED LANGUAGE LOGIC (SEPARATE SCRIPTS) ---
         const lang = bodyData.language || 'en-US';
-        if (lang === 'hi-IN') systemRule += " \nOUTPUT: Hindi + Hinglish (Roman) in brackets.";
-        else if (lang === 'bn-BD') systemRule += " \nOUTPUT: Bengali + Roman Bengali in brackets.";
-        else systemRule += " \nOUTPUT: Polite English.";
+        if (lang === 'hi-IN') {
+            systemRule += " \nOUTPUT FORMAT: 1. Write the FULL response in Hindi (Devanagari) with Emojis. 2. Add two newlines (gap). 3. Then write the full English script/translation in parentheses ().";
+        } else if (lang === 'bn-BD') {
+            systemRule += " \nOUTPUT FORMAT: 1. Write the FULL response in Bengali (Bangla Script) with Emojis. 2. Add two newlines (gap). 3. Then write the full English script/translation in parentheses ().";
+        } else {
+            systemRule += " \nOUTPUT FORMAT: Polite English with Emojis.";
+        }
 
         const reqGoogle = https.request(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }
@@ -154,7 +153,6 @@ module.exports = async (req, res) => {
             resGoogle.on('end', () => {
                 try {
                     const json = JSON.parse(data);
-                    
                     if (json.error) {
                         res.status(200).json({ text: "⚠️ Model Error: " + json.error.message });
                     } else if (json.candidates && json.candidates[0] && json.candidates[0].content) {
@@ -163,7 +161,6 @@ module.exports = async (req, res) => {
                     } else {
                         res.status(200).json({ text: "⚠️ Empty Response from AI." });
                     }
-
                 } catch (e) { res.status(200).json({ text: "Connection error." }); }
             });
         });
